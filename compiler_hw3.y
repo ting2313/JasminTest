@@ -57,7 +57,7 @@ void gencode_function();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> type compound_stat function_call declaration_type equal_rhs value
+%type <string> after_value expression type compound_stat function_call declaration_type equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -95,7 +95,7 @@ declaration
             //globol variable
             if(!strcmp($1,"float")){
                 fprintf(file,
-                    ".field public static %s F=0\n", $2);
+                    ".field public static %s F=%s\n", $2,$3);
             }else{
                 fprintf(file,
                     ".field public static %s I=%s\n", $2,$3);
@@ -207,13 +207,17 @@ equal_rhs
 ;
 
 value
-    : I_CONST   {char temp[10]={0};sprintf(temp,"%d",$1);$$=temp;}
-    | F_CONST   {}
-    | '-' value     {}
+    : I_CONST   {char temp[10]={0};sprintf(temp,"%d",$1);$$=strdup(temp);}
+    | F_CONST   {char temp[10]={0};sprintf(temp,"%f",$1);$$=strdup(temp);}
+    | '-' value     {$$=strdup($2);}
     | STR_CONST     {$$=$1;}
-    | value after_value     {}
+    | value after_value     {
+        printf("after value:%s\n",$2);
+        //fprintf(file, "ldc %s\n",$2);
+    }
     | LB value RB   {}
     | ID function_call{
+
     }
     | T     {$$="1";}
     | F     {$$="0";}
@@ -229,8 +233,8 @@ function_call
 ;
 
 after_value
-    : expression
-    | comparison
+    : expression {$$=strdup($1);}
+    | comparison {$$="strdup($1)";}
 ;
 
 postfix
@@ -239,11 +243,28 @@ postfix
 ;
 
 expression
-    : '+' value
-    | '-' value
-    | '*' value
-    | '/' value
-    | '%' value
+    : '+' value {
+        printf("value+\n");
+        fprintf(file, "ldc %s\n",$2);
+        $$="+";
+    }
+    | '-' value {
+        fprintf(file, "ldc %s\n",$2);
+        $$="-";
+    }
+    | '*' value {
+        printf("value*\n");
+        fprintf(file, "ldc %s\n",$2);
+        $$="*";
+    }
+    | '/' value {
+        fprintf(file, "ldc %s\n",$2);
+        $$="/";
+    }
+    | '%' value {
+        fprintf(file, "ldc %s\n",$2);
+        $$="%";
+    }
 ;
 
 /* actions can be taken when meet the token or rule */

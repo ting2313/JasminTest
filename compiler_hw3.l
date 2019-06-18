@@ -94,7 +94,7 @@ id			{letter}+({letter}|{digit})*
 
  /* Number Constant */
 {integer}	{ yylval.i_val=atoi(yytext);return I_CONST; }
-{double}	{ yylval.f_val=atoi(yytext);return F_CONST; }
+{double}	{ yylval.f_val=atof(yytext);return F_CONST; }
 
  /* C type Comment */
 "/*"				{ BEGIN COMMENT; }
