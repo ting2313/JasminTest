@@ -14,12 +14,6 @@ FILE *file; // To generate .j file for Jasmin
 void yyerror(char *s);
 
 /* symbol table functions */
-int lookup_symbol();
-void create_symbol_table();
-void free_symbol_table();
-void insert_symbol();
-void dump_symbol();
-
 struct symbol_row{
     int number;
     int scope;
@@ -29,6 +23,26 @@ struct symbol_row{
 struct symbol_row s_table[50] = {};
 int max_index = 0;
 int scope = 0;
+
+int lookup_symbol();
+void create_symbol_table();
+void free_symbol_table();
+void insert_symbol();
+void dump_symbol();
+
+/* stack functions */
+typedef struct{
+    int know;   //1:const 0:sth in stack -1:variable
+    char value[16];
+    char type[16];  //int or float
+}element;
+element stack[50] = {0};
+int top=-1;
+
+void push();
+element pop();
+char* casting();
+
 /* code generation functions, just an example! */
 void gencode_function();
 
@@ -57,7 +71,7 @@ void gencode_function();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> after_value expression type compound_stat function_call declaration_type equal_rhs value
+%type <string> after_value expression type compound_stat declaration_type equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -87,9 +101,14 @@ declaration
             if(!strcmp($1,"float")){
                 fprintf(file, "\tfstore %d\n", max_index);
                 max_index++;
+
+                /*maintain symbol table*/
+
             }else{
                 fprintf(file, "\tistore %d\n", max_index);
                 max_index++;
+
+                /*maintain symbol table*/
             }
         }else{
             //globol variable
@@ -198,7 +217,10 @@ comparison
 
 
 equal_rhs
-    :'=' value {$$=$2;}
+    :'=' value {
+        $$=$2;
+        //element item = pop();
+    }
     | ADDASGN value {$$=$2;}
     | SUBASGN value {$$=$2;}
     | MULASGN value {$$=$2;}
@@ -207,34 +229,49 @@ equal_rhs
 ;
 
 value
-    : I_CONST   {char temp[10]={0};sprintf(temp,"%d",$1);$$=strdup(temp);}
-    | F_CONST   {char temp[10]={0};sprintf(temp,"%f",$1);$$=strdup(temp);}
-    | '-' value     {$$=strdup($2);}
-    | STR_CONST     {$$=$1;}
-    | value after_value     {
-        printf("after value:%s\n",$2);
-        //fprintf(file, "ldc %s\n",$2);
+    : I_CONST   {
+        char temp[10]={0};
+        sprintf(temp,"%d",$1);
+        $$=strdup(temp);
+        push(1,temp,"int");
     }
-    | LB value RB   {}
-    | ID function_call{
+    | F_CONST   {
+        char temp[10]={0};
+        sprintf(temp,"%f",$1);
+        $$=strdup(temp);
+        push(1,temp,"float");
+    }
+    | '-' value     {
+        $$=strdup($2);
+        element item = pop();
+        sprintf(item.value,"-%s",item.value);
+        push(item.know,item.value,item.type);
+    }
+    | STR_CONST     {$$=strdup($1);}
+    | after_value     {
+
+    }
+    | LB value RB   {
+
+    }
+    | ID {
+        //find index
+        //push
+    }
+    | ID LB input_argu RB{
 
     }
     | T     {$$="1";}
     | F     {$$="0";}
 ;
 
-function_call
-    : LB input_argu RB{
-        $$ = "funciton";
-    }
-    | {
-        $$ = "ID";
-    }
+
+
 ;
 
 after_value
     : expression {$$=strdup($1);}
-    | comparison {$$="strdup($1)";}
+    | comparison {$$="comparison";}
 ;
 
 postfix
@@ -243,27 +280,71 @@ postfix
 ;
 
 expression
-    : '+' value {
-        printf("value+\n");
-        fprintf(file, "ldc %s\n",$2);
-        $$="+";
+    :value '+' value {
+        element v1 = pop();
+        element v2 = pop();
+        printf("value+value\n");
+        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+
+        if(!strcmp(casting(v1,v2),"int")){
+            fprintf(file, "\tiadd\n");
+        }else{
+            fprintf(file, "\tfadd\n");
+        }
+        push(0,"un",casting(v1,v2));
     }
-    | '-' value {
-        fprintf(file, "ldc %s\n",$2);
-        $$="-";
+    |value '-' value {
+        element v1 = pop();
+        element v2 = pop();
+        printf("value-value\n");
+        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+        if(!strcmp(casting(v1,v2),"int")){
+            fprintf(file, "\tisub\n");
+        }else{
+            fprintf(file, "\tfsub\n");
+        }
+        push(0,"un",casting(v1,v2));
     }
-    | '*' value {
-        printf("value*\n");
-        fprintf(file, "ldc %s\n",$2);
-        $$="*";
+    |value '*' value {
+        element v1 = pop();
+        element v2 = pop();
+        printf("value*value\n");
+        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+        if(!strcmp(casting(v1,v2),"int")){
+            fprintf(file, "\timul\n");
+        }else{
+            fprintf(file, "\tfmul\n");
+        }
+        push(0,"un",casting(v1,v2));
     }
-    | '/' value {
-        fprintf(file, "ldc %s\n",$2);
-        $$="/";
+    |value '/' value {
+        element v1 = pop();
+        element v2 = pop();
+        printf("value/value\n");
+        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+        if(!strcmp(casting(v1,v2),"int")){
+            fprintf(file, "\tidiv\n");
+        }else{
+            fprintf(file, "\tfdiv\n");
+        }
+        push(0,"un",casting(v1,v2));
     }
-    | '%' value {
-        fprintf(file, "ldc %s\n",$2);
-        $$="%";
+    |value '%' value {
+        element v1 = pop();
+        element v2 = pop();
+        printf("value mod value\n");
+        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+        if(!strcmp(casting(v1,v2),"int")){
+            fprintf(file, "\tirem\n");
+        }else{
+            //error!!!!
+        }
+        push(0,"un","int");
     }
 ;
 
@@ -319,3 +400,27 @@ void dump_symbol() {}
 
 /* code generation functions */
 void gencode_function() {}
+
+/*stack funtions*/
+element pop(){
+    if(top==-1){
+        printf("pop error!\n");
+    }
+    return stack[top--];
+}
+
+void push(int know,char* value, char* type){
+    top++;
+    stack[top].know = know;
+    sprintf(stack[top].value,"%s",value);
+    sprintf(stack[top].type,"%s",type);
+    printf("push:index:%d(%s,%s)\n",top,stack[top].value,stack[top].type);
+}
+
+char* casting(element v1, element v2){
+    if(!strcmp(v1.type,v2.type)){
+        return strdup(v1.type);
+    }else{
+        return "float";
+    }
+}
