@@ -41,12 +41,13 @@ int top=-1;
 void push();
 element pop();
 char* casting();
+void print_stack();
 
 /* code generation functions, just an example! */
 void gencode_function();
 void gencode_print();
 element gencode_cast();
-char* gencode_push();
+void gencode_push();
 void gencode_exp();
 void gencode_assign();
 
@@ -95,6 +96,7 @@ external_stat
     }
     | func_def LCB func_compound{
         //define funciton
+
     }
 ;
 
@@ -266,7 +268,9 @@ condition
 ;
 
 comparison
-    : value EQ value
+    : value EQ value{
+
+    }
     | value MT value
     | value LT value
     | value MTE value
@@ -293,6 +297,7 @@ value
         char temp[10]={0};
         sprintf(temp,"%d",$1);
         $$=strdup(temp);
+        printf("push I_CONST:%s\n",temp);
         push(1,temp,"int");
     }
     | F_CONST   {
@@ -300,13 +305,6 @@ value
         sprintf(temp,"%f",$1);
         $$=strdup(temp);
         push(1,temp,"float");
-    }
-    | '-' value     {
-        $$=strdup($2);
-        element item = pop();
-        sprintf(item.value,"-%s",item.value);
-        // struction??
-        push(item.know,item.value,item.type);
     }
     | STR_CONST     {$$=strdup($1);}
     | after_value     {
@@ -450,14 +448,15 @@ void gencode_print(char* type){
 }
 
 /*return whether should put back item from register 50 */
-char* gencode_push(element v,int flag){
+void gencode_push(element v,int flag){
     // pop a element from my stack
     // and push into stack of Jasmin
     // flag=0 mean second value of expr
-    char store_type[10] = {0};
-    sprintf(store_type,"%s","no");
-    if(v.know==1) {fprintf(file, "\tldc %s\n",v.value);printf("case 1:v.reg=%d\n",v.know);}
-    else if(v.know==-1){   //value is variable
+
+    if(v.know==1) {
+        fprintf(file, "\tldc %s\n",v.value);
+        printf("case 1:v.reg=%d\n",v.know);
+    }else if(v.know==-1){   //value is variable
         printf("case 2:v.reg=%d\n",v.know);
         int i = atoi(v.value);
         if(s_table[i].reg==-1){   //globol
@@ -479,17 +478,10 @@ char* gencode_push(element v,int flag){
         }
     }else if(flag){  // value in stack
 
-        // printf("case 3:v.reg=%d\n",v.know);
-        // if(!strcmp(v.type,"int")){
-        //     fprintf(file, "\tistore 50\n");
-        //     sprintf(store_type,"%s","int");
-        // }else{
-        //     fprintf(file, "\tfstore 50\n");
-        //     sprintf(store_type,"%s","float");
-        // }
+        printf("case 3:v.reg=%d\n",v.know);
+
     }
 
-    return strdup(store_type);
 }
 
 element gencode_cast(element v_cast,element v,int flag){
@@ -510,37 +502,27 @@ element gencode_cast(element v_cast,element v,int flag){
 }
 
 void gencode_exp(char* op){
+    printf("gencode\n");
+    print_stack();
     element v1 = pop();
     element v2 = pop();
 
-    char store_type[10] = {0};
-    sprintf(store_type, "%s", gencode_push(v2,1));
-    printf("v2:%d store_type:%s\n",v2.know,store_type);
-    v2=gencode_cast(v2,v1,0);
     gencode_push(v1,0);
     v1=gencode_cast(v1,v2,0);
-    printf("v1:%d store_type:%s\n",v1.know,store_type);
+    gencode_push(v2,1);
+    v2=gencode_cast(v2,v1,0);
 
-    // if(strcmp(store_type,"no")){
-    //     if(!strcmp(store_type,"int")){
-    //         fprintf(file, "\tiload 50\n");
-    //     }else{
-    //         fprintf(file, "\tfload 50\n");
-    //     }
-    // }
-
+    fprintf(file, "\tswap\n");
     if(!strcmp(v1.type,"int")){
         fprintf(file, "\ti%s\n",op);
     }else{
         fprintf(file, "\tf%s\n",op);
     }
-
     push(0,"un",strdup(v1.type));
 }
 
 void gencode_assign(int lhs,char* op){
     char temp[10]={0};
-
     sprintf(temp,"%d",lhs);
     push(-1,temp,s_table[lhs].type);
     gencode_exp(op);
@@ -559,4 +541,12 @@ void push(int know,char* value, char* type){
     stack[top].know = know;
     sprintf(stack[top].value,"%s",value);
     sprintf(stack[top].type,"%s",type);
+}
+
+void print_stack(){
+    printf("----my stack----\n");
+    for(int i=0;i<=top;i++){
+        printf("%d:%d,%s\n",i,stack[i].know,stack[i].type);
+    }
+    printf("----------------\n");
 }
