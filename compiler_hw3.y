@@ -44,6 +44,8 @@ char* casting();
 
 /* code generation functions, just an example! */
 void gencode_function();
+element gencode_cast();
+void gencode_push();
 void gencode_exp();
 
 %}
@@ -189,6 +191,19 @@ statments
 stat
     : declaration SEMICOLON
     | ID equal_rhs SEMICOLON{
+        int i = lookup_symbol($1);
+        element lhs;
+        sprintf(lhs.type,"%s",s_table[i].type);
+        element rhs = pop();
+        gencode_push(rhs);
+        printf("rhs:%s(lhs:%s)\n",rhs.type,lhs.type);
+        rhs=gencode_cast(rhs,lhs,1);
+        printf("rhs:%s\n",rhs.type);
+        if(!strcmp(s_table[i].type,"int")){
+            fprintf(file, "\tistore %d\n",s_table[i].reg);
+        }else{
+            fprintf(file, "\tfstore %d\n",s_table[i].reg);
+        }
 
     }
     | WHILE LB condition RB LCB compound_stat
@@ -355,8 +370,6 @@ void insert_symbol(char* name,char* type,int reg) {
     s_table[max_index].scope = scope;
     sprintf(s_table[max_index].name, "%s",name);
     sprintf(s_table[max_index].type, "%s",type);
-    printf("insert:%s,%d\n",s_table[max_index].name,
-        s_table[max_index].reg);
 }
 
 int lookup_symbol(char* name) {
@@ -364,8 +377,6 @@ int lookup_symbol(char* name) {
     if(max_index==-1)   return -1;
     for(int i=0;i<=max_index;i++){
         if(!strcmp(s_table[i].name,name)){
-            printf("lookup:%s,%d\n",
-                s_table[i].name,i);
             return i;
         }
     }
@@ -385,7 +396,7 @@ void dump_symbol() {
 
 /* code generation functions */
 void gencode_function() {}
-void gencode_pop(element v){
+void gencode_push(element v){
     if(v.know==1) fprintf(file, "\tldc %s\n",v.value);
     else if(v.know==-1){   //value is variable
         int i = atoi(v.value);
@@ -409,20 +420,39 @@ void gencode_pop(element v){
     }
 }
 
+element gencode_cast(element v_cast,element v,int flag){
+    //flag=1:assign flag=0:expr
+    element ans = v_cast;
+    if(strcmp(v_cast.type,v.type)){
+        if(!strcmp(v_cast.type,"int")){
+            fprintf(file, "\ti2f\n");
+            sprintf(ans.type,"float");
+        }else{
+            if(flag){
+                fprintf(file, "\tf2i\n");
+                sprintf(ans.type,"int");
+            }
+        }
+    }
+    return ans;
+}
+
 void gencode_exp(char* op){
     element v1 = pop();
     element v2 = pop();
 
-    gencode_pop(v1);
-    gencode_pop(v2);
+    gencode_push(v1);
+    v1=gencode_cast(v1,v2,0);
+    gencode_push(v2);
+    v2=gencode_cast(v2,v1,0);
 
-    if(!strcmp(casting(v1,v2),"int")){
+    if(!strcmp(v1.type,"int")){
         fprintf(file, "\ti%s\n",op);
     }else{
         fprintf(file, "\tf%s\n",op);
     }
 
-    push(0,"un",casting(v1,v2));
+    push(0,"un",strdup(v1.type));
 }
 
 /*stack funtions*/
@@ -438,12 +468,4 @@ void push(int know,char* value, char* type){
     stack[top].know = know;
     sprintf(stack[top].value,"%s",value);
     sprintf(stack[top].type,"%s",type);
-}
-
-char* casting(element v1, element v2){
-    if(!strcmp(v1.type,v2.type)){
-        return strdup(v1.type);
-    }else{
-        return "float";
-    }
 }
