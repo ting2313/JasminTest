@@ -8,6 +8,7 @@
 
 extern YYSTYPE yylval; //YYSTYPE
 extern int scope;
+extern void dump_symbol();
 char buf[256];
 %}
 
@@ -60,7 +61,7 @@ id			{letter}+({letter}|{digit})*
 "("		{ return LB; }
 ")"		{ return RB; }
 "{"		{ scope++;return LCB; }
-"}"		{ scope--;return RCB; }
+"}"		{ dump_symbol();scope--;return RCB; }
 "["		{ return '['; }
 "]"		{ return ']'; }
 ","		{ return COMMA; }

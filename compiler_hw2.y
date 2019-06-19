@@ -62,7 +62,7 @@ rowptr head,tail,new_func,new_argu, list_head, list_tail;
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
 /* Nonterminal with return, which need to sepcify type */
-%type <string> type compound_stat function_call
+%type <string> arguments type compound_stat function_call
 
 /* Yacc will start at this nonterminal */
 %start program

@@ -12,6 +12,16 @@ extern char buf[256]; // Get current code line from lex
 FILE *file; // To generate .j file for Jasmin
 
 void yyerror(char *s);
+/*function table*/
+typedef struct{
+    char name[20];
+    char a_type[10];
+    char type[10];
+}func_row;
+func_row f_table[32] = {};
+int max_f = -1;
+int lookup_func();
+void print_func();
 
 /* symbol table functions */
 typedef struct{
@@ -28,6 +38,7 @@ int scope = 0;
 int lookup_symbol();
 void insert_symbol();
 void dump_symbol();
+void print_stable();
 
 /* stack functions */
 typedef struct{
@@ -50,6 +61,7 @@ element gencode_cast();
 void gencode_push();
 void gencode_exp();
 void gencode_assign();
+char gencode_atype();
 
 %}
 
@@ -76,7 +88,7 @@ void gencode_assign();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> declaration_type after_value expression type compound_stat equal_rhs value
+%type <string> func_def argu input_argu arguments declaration_type after_value expression type compound_stat equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -96,6 +108,16 @@ external_stat
     }
     | func_def LCB func_compound{
         //define funciton
+        char c;
+        if(!strcmp($1,"int")){
+            fprintf(file, "\tireturn\n");
+        }else if(!strcmp($1,"float")){
+            fprintf(file, "\tfreturn\n");
+        }else if(!strcmp($1,"void")){
+            fprintf(file, "\treturn\n");
+        }
+
+        fprintf(file, ".end method\n");
 
     }
 ;
@@ -106,28 +128,27 @@ func_compound
 declaration
     : type ID declaration_type{
         max_index++;
-
         if(scope){
             //local variable
             max_reg++;
             fprintf(file, "\tldc %s\n",$3);
             if(!strcmp($1,"float")){
                 fprintf(file, "\tfstore %d\n", max_reg);
-                insert_symbol($2,"float",max_reg);
+                insert_symbol($2,"float",max_reg,scope);
             }else{
                 fprintf(file, "\tistore %d\n", max_reg);
-                insert_symbol($2,"int",max_reg);
+                insert_symbol($2,"int",max_reg,scope);
             }
         }else{
             //globol variable
             if(!strcmp($1,"float")){
                 fprintf(file,
                     ".field public static %s F=%s\n", $2,$3);
-                insert_symbol($2,"float",-1);
+                insert_symbol($2,"float",-1,scope);
             }else{
                 fprintf(file,
                     ".field public static %s I=%s\n", $2,$3);
-                insert_symbol($2,"int",-1);
+                insert_symbol($2,"int",-1,scope);
             }
         }
     }
@@ -149,38 +170,113 @@ declaration_type    //string:the number of answer;
 
 func_def
     : type ID LB arguments RB{
+        func_row new;
+        max_f++;
+        sprintf(new.name,"%s",$2);
+        sprintf(new.a_type,"%s",$4);
+
+        char temp[10]={0};
+        sprintf(temp,"%s",$1);
+        $$=strdup(temp);
         //start a function
         fprintf(file,
-            ".method public static %s([Ljava/lang/String;)V\n",$2);
-        //fprintf(file, "");
-        fprintf(file, "\t.limit stack 50\n");
+            ".method public static %s",$2);
+        if(!strcmp($2,"main")){
+            fprintf(file,
+                "([Ljava/lang/String;)V\n");
+        }else{
+            fprintf(file,"(%s)",$4);
+            if(!strcmp($1,"void")){
+                fprintf(file, "V\n");
+                sprintf(new.type,"V");
+            }else if(!strcmp($1,"int")){
+                fprintf(file, "I\n");
+                sprintf(new.type,"I");
+            }else{
+                fprintf(file, "F\n");
+                sprintf(new.type,"F");
+            }
+        }
+        fprintf(file, ".limit stack 50\n");
+        fprintf(file, ".limit locals 50\n");
+        f_table[max_f] = new;
+    }
+    | type ID LB RB{
+        func_row new;
+        max_f++;
+        char temp[10]={0};
+        sprintf(temp,"%s",$1);
+        $$=strdup(temp);
+        fprintf(file,
+            ".method public static %s",$2);
+        if(!strcmp($2,"main")){
+            fprintf(file,
+                "([Ljava/lang/String;)V\n");
+        }else{
+            fprintf(file,"()");
+            if(!strcmp($1,"void")){
+                fprintf(file, "V\n");
+                sprintf(new.type,"V");
+            }else if(!strcmp($1,"int")){
+                fprintf(file, "I\n");
+                sprintf(new.type,"I");
+            }else{
+                fprintf(file, "F\n");
+                sprintf(new.type,"F");
+            }
+        }
+        fprintf(file, ".limit stack 50\n");
+        fprintf(file, ".limit locals 50\n");
+
+        sprintf(new.name,"%s",$2);
+        sprintf(new.a_type," ");
+        f_table[max_f] = new;
     }
 ;
 
 arguments
-    : type ID arguments{
-
+    : type ID COMMA arguments {
+        char temp[10]={0};
+        sprintf(temp,"%c%s",gencode_atype($1),$4);
+        $$=strdup(temp);
+        max_reg++;
+        max_index++;
+        insert_symbol($2,$1,max_reg,scope+1);
     }
-    | COMMA type ID arguments{
-
+    | argu {
+        char temp[10] = {0};
+        sprintf(temp,"%s",$1);
+        $$=strdup(temp);
     }
-    |   {
+;
+
+argu
+    : type ID{
+        char temp[10] = {0};
+        sprintf(temp,"%c",gencode_atype($1));
+        $$=strdup(temp);
+        max_reg=-1;
+        max_reg++;
+        max_index++;
+        insert_symbol($2,$1,max_reg,scope+1);
     }
 ;
 
 input_argu
-    : value input_argu
-    | COMMA value input_argu
-    |
+    : value COMMA input_argu
+    | value
 ;
 
 compound_stat
-    : statments end_stat RCB    { }
+    : statments end_stat RCB    {
+    }
 ;
 
 end_stat
-    : RETURN end_semi
-    |
+    : RETURN end_semi{
+    }
+    |{
+    }
 ;
 
 end_semi
@@ -215,12 +311,23 @@ stat
     | PRINT LB print_word RB SEMICOLON
     | value postfix SEMICOLON
     | ID LB input_argu RB SEMICOLON{
+        int i = lookup_func($1);
+        printf("test:%s\n",$1);
+        print_func();
+        fprintf(file,
+            "\tinvokestatic compiler_hw3/%s(%s)V\n",
+            $1,f_table[i].a_type);
+        //invokestatic compiler_hw3/foo(I)I
+    }
+    | ID LB  RB SEMICOLON{
+        fprintf(file,
+            "\tinvokestatic compiler_hw3/%s()V\n",$1);
     }
 ;
 
 else_scope
     : ELSE LCB compound_stat
-    | ELSE IF  LB condition RB LCB compound_stat else_scope
+    | ELSE IF LB condition RB LCB compound_stat else_scope
     |
 ;
 
@@ -321,7 +428,12 @@ value
         push(-1,temp,s_table[i].type);
     }
     | ID LB input_argu RB{
+        int i=lookup_func($1);
+/**/
 
+        fprintf(file,
+            "\tinvokestatic compiler_hw3/%s(%s)%s\n",
+            $1,f_table[i].a_type,f_table[i].type);
     }
     | T     {$$="1";}
     | F     {$$="0";}
@@ -381,9 +493,6 @@ int main(int argc, char** argv)
     yyparse();
     printf("\nTotal lines: %d \n",yylineno);
 
-    fprintf(file, "\treturn\n"
-                  ".end method\n");
-
     fclose(file);
 
     return 0;
@@ -392,17 +501,37 @@ int main(int argc, char** argv)
 void yyerror(char *s)
 {
     printf("\n|-----------------------------------------------|\n");
-    printf("| Error found in line %d: %s\n", yylineno, buf);
+    printf("| Error found in line %d: %s\n", yylineno+1, buf);
     printf("| %s", s);
     printf("\n| Unmatched token: %s", yytext);
     printf("\n|-----------------------------------------------|\n");
     exit(-1);
 }
 
+/* function table */
+int lookup_func(char* name) {
+    /*reture the index in symbol table*/
+    if(max_f==-1)   return -1;
+    for(int i=0;i<=max_f;i++){
+        if(!strcmp(f_table[i].name,name)){
+            return i;
+        }
+    }
+}
+
+void print_func(){
+    printf("----func----\n");
+    for(int i=0;i<=max_f;i++){
+        printf("%d:%s,%s,%s\n",i,f_table[i].name,
+            f_table[i].type,f_table[i].a_type);
+    }
+    printf("----------------\n");
+}
+
 /* stmbol table functions */
-void insert_symbol(char* name,char* type,int reg) {
+void insert_symbol(char* name,char* type,int reg,int s) {
     s_table[max_index].reg = reg;
-    s_table[max_index].scope = scope;
+    s_table[max_index].scope = s;
     sprintf(s_table[max_index].name, "%s",name);
     sprintf(s_table[max_index].type, "%s",type);
 }
@@ -417,10 +546,18 @@ int lookup_symbol(char* name) {
     }
 }
 
+void print_stable(){
+    printf("----s_table----\n");
+    for(int i=0;i<=max_index;i++){
+        printf("%d:%s,%s,%d\n",i,s_table[i].name,s_table[i].type,s_table[i].reg);
+    }
+    printf("----------------\n");
+}
+
 void dump_symbol() {
     if(max_index==-1)   return;
     for(int i=max_index;i>=0;i--){
-        if(s_table[i].scope==(scope-1)){
+        if(s_table[i].scope==scope){
             if(s_table[i].reg!=-1){
                 max_reg--;
             }
@@ -455,9 +592,7 @@ void gencode_push(element v,int flag){
 
     if(v.know==1) {
         fprintf(file, "\tldc %s\n",v.value);
-        printf("case 1:v.reg=%d\n",v.know);
     }else if(v.know==-1){   //value is variable
-        printf("case 2:v.reg=%d\n",v.know);
         int i = atoi(v.value);
         if(s_table[i].reg==-1){   //globol
             if(!strcmp(v.type,"int")){
@@ -477,8 +612,6 @@ void gencode_push(element v,int flag){
             }
         }
     }else if(flag){  // value in stack
-
-        printf("case 3:v.reg=%d\n",v.know);
 
     }
 
@@ -502,8 +635,6 @@ element gencode_cast(element v_cast,element v,int flag){
 }
 
 void gencode_exp(char* op){
-    printf("gencode\n");
-    print_stack();
     element v1 = pop();
     element v2 = pop();
 
@@ -526,6 +657,16 @@ void gencode_assign(int lhs,char* op){
     sprintf(temp,"%d",lhs);
     push(-1,temp,s_table[lhs].type);
     gencode_exp(op);
+}
+
+char gencode_atype(char* type){
+    char c;
+    if(!strcmp(type, "int")){
+        c='I';
+    }else{
+        c='F';
+    }
+    return c;
 }
 
 /*stack funtions*/
