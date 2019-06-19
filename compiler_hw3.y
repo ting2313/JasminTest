@@ -46,8 +46,9 @@ char* casting();
 void gencode_function();
 void gencode_print();
 element gencode_cast();
-void gencode_push();
+char* gencode_push();
 void gencode_exp();
+void gencode_assign();
 
 %}
 
@@ -193,20 +194,19 @@ stat
     : declaration SEMICOLON
     | ID equal_rhs SEMICOLON{
         int i = lookup_symbol($1);
-
+        if(strcmp($2,"no")){
+            gencode_assign(i,$2);
+        }
         element lhs;
         sprintf(lhs.type,"%s",s_table[i].type);
         element rhs = pop();
         gencode_push(rhs);
-        printf("rhs:%s(lhs:%s)\n",rhs.type,lhs.type);
         rhs=gencode_cast(rhs,lhs,1);
-        printf("rhs:%s\n",rhs.type);
         if(!strcmp(s_table[i].type,"int")){
             fprintf(file, "\tistore %d\n",s_table[i].reg);
         }else{
             fprintf(file, "\tfstore %d\n",s_table[i].reg);
         }
-
     }
     | WHILE LB condition RB LCB compound_stat
     | IF LB condition RB LCB compound_stat else_scope
@@ -225,8 +225,7 @@ else_scope
 print_word
     : ID{
         int i = lookup_symbol($1);
-        // static!!
-        if(s_table[i].reg==-1){
+        if(s_table[i].reg==-1){     //static
             if(!strcmp(s_table[i].type,"int")){
                 fprintf(file,
                     "\tgetstatic compiler_hw3/%s I\n",
@@ -246,7 +245,6 @@ print_word
             }
         }
         gencode_print(s_table[i].type);
-
     }
     | STR_CONST{
         fprintf(file,"\tldc \"%s\"\n",$1);
@@ -268,24 +266,26 @@ condition
 ;
 
 comparison
-    : EQ value
-    | MT value
-    | LT value
-    | MTE value
-    | LTE value
-    | NE value
+    : value EQ value
+    | value MT value
+    | value LT value
+    | value MTE value
+    | value LTE value
+    | value NE value
 ;
 
 
 equal_rhs
     :'=' value {
-        $$=$2;
+        $$="no";
     }
-    | ADDASGN value {$$=$2;}
-    | SUBASGN value {$$=$2;}
-    | MULASGN value {$$=$2;}
-    | DIVASGN value {$$=$2;}
-    | MODASGN value {$$=$2;}
+    | ADDASGN value {
+        $$="add";
+    }
+    | SUBASGN value {$$="sub";}
+    | MULASGN value {$$="mul";}
+    | DIVASGN value {$$="div";}
+    | MODASGN value {$$="rem";}
 ;
 
 value
@@ -341,19 +341,19 @@ postfix
 
 expression
     :value '+' value {
-        gencode_exp("add");
+        gencode_exp("add",0);
     }
     |value '-' value {
-        gencode_exp("sub");
+        gencode_exp("sub",0);
     }
     |value '*' value {
-        gencode_exp("mul");
+        gencode_exp("mul",0);
     }
     |value '/' value {
-        gencode_exp("div");
+        gencode_exp("div",0);
     }
     |value '%' value {
-        gencode_exp("rem");
+        gencode_exp("rem",0);
     }
 ;
 
@@ -449,11 +449,16 @@ void gencode_print(char* type){
     }
 }
 
-void gencode_push(element v){
+/*return whether should put back item from register 50 */
+char* gencode_push(element v,int flag){
     // pop a element from my stack
     // and push into stack of Jasmin
-    if(v.know==1) fprintf(file, "\tldc %s\n",v.value);
+    // flag=0 mean second value of expr
+    char store_type[10] = {0};
+    sprintf(store_type,"%s","no");
+    if(v.know==1) {fprintf(file, "\tldc %s\n",v.value);printf("case 1:v.reg=%d\n",v.know);}
     else if(v.know==-1){   //value is variable
+        printf("case 2:v.reg=%d\n",v.know);
         int i = atoi(v.value);
         if(s_table[i].reg==-1){   //globol
             if(!strcmp(v.type,"int")){
@@ -472,7 +477,19 @@ void gencode_push(element v){
                 fprintf(file, "\tfload %d\n",s_table[i].reg);
             }
         }
+    }else if(flag){  // value in stack
+
+        // printf("case 3:v.reg=%d\n",v.know);
+        // if(!strcmp(v.type,"int")){
+        //     fprintf(file, "\tistore 50\n");
+        //     sprintf(store_type,"%s","int");
+        // }else{
+        //     fprintf(file, "\tfstore 50\n");
+        //     sprintf(store_type,"%s","float");
+        // }
     }
+
+    return strdup(store_type);
 }
 
 element gencode_cast(element v_cast,element v,int flag){
@@ -496,10 +513,21 @@ void gencode_exp(char* op){
     element v1 = pop();
     element v2 = pop();
 
-    gencode_push(v1);
-    v1=gencode_cast(v1,v2,0);
-    gencode_push(v2);
+    char store_type[10] = {0};
+    sprintf(store_type, "%s", gencode_push(v2,1));
+    printf("v2:%d store_type:%s\n",v2.know,store_type);
     v2=gencode_cast(v2,v1,0);
+    gencode_push(v1,0);
+    v1=gencode_cast(v1,v2,0);
+    printf("v1:%d store_type:%s\n",v1.know,store_type);
+
+    // if(strcmp(store_type,"no")){
+    //     if(!strcmp(store_type,"int")){
+    //         fprintf(file, "\tiload 50\n");
+    //     }else{
+    //         fprintf(file, "\tfload 50\n");
+    //     }
+    // }
 
     if(!strcmp(v1.type,"int")){
         fprintf(file, "\ti%s\n",op);
@@ -508,6 +536,14 @@ void gencode_exp(char* op){
     }
 
     push(0,"un",strdup(v1.type));
+}
+
+void gencode_assign(int lhs,char* op){
+    char temp[10]={0};
+
+    sprintf(temp,"%d",lhs);
+    push(-1,temp,s_table[lhs].type);
+    gencode_exp(op);
 }
 
 /*stack funtions*/
