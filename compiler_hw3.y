@@ -44,6 +44,7 @@ char* casting();
 
 /* code generation functions, just an example! */
 void gencode_function();
+void gencode_print();
 element gencode_cast();
 void gencode_push();
 void gencode_exp();
@@ -192,6 +193,7 @@ stat
     : declaration SEMICOLON
     | ID equal_rhs SEMICOLON{
         int i = lookup_symbol($1);
+
         element lhs;
         sprintf(lhs.type,"%s",s_table[i].type);
         element rhs = pop();
@@ -221,8 +223,43 @@ else_scope
 ;
 
 print_word
-    : ID
-    | STR_CONST
+    : ID{
+        int i = lookup_symbol($1);
+        // static!!
+        if(s_table[i].reg==-1){
+            if(!strcmp(s_table[i].type,"int")){
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s I\n",
+                    s_table[i].name);
+            }else{
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s F\n",
+                    s_table[i].name);
+            }
+        }else{
+            if(!strcmp(s_table[i].type,"int")){
+                fprintf(file,"\tiload %d\n",s_table[i].reg);
+            }else if(!strcmp(s_table[i].type,"float")){
+                fprintf(file,"\tfload %d\n",s_table[i].reg);
+            }else{
+                fprintf(file,"\taload %d\n",s_table[i].reg);
+            }
+        }
+        gencode_print(s_table[i].type);
+
+    }
+    | STR_CONST{
+        fprintf(file,"\tldc \"%s\"\n",$1);
+        gencode_print("string");
+    }
+    | I_CONST{
+        fprintf(file,"\tldc %d\n",$1);
+        gencode_print("int");
+    }
+    | F_CONST{
+        fprintf(file,"\tldc %f\n",$1);
+        gencode_print("float");
+    }
 ;
 
 condition
@@ -396,7 +433,25 @@ void dump_symbol() {
 
 /* code generation functions */
 void gencode_function() {}
+void gencode_print(char* type){
+    fprintf(file,
+        "\tgetstatic java/lang/System/out "
+        "Ljava/io/PrintStream;\n\tswap\n"
+        "\tinvokevirtual "
+        "java/io/PrintStream/println"
+        );
+    if(!strcmp(type,"int")){
+        fprintf(file,"(I)V\n");
+    }else if(!strcmp(type,"float")){
+        fprintf(file,"(F)V\n");
+    }else{
+        fprintf(file,"(Ljava/lang/String;)V\n");
+    }
+}
+
 void gencode_push(element v){
+    // pop a element from my stack
+    // and push into stack of Jasmin
     if(v.know==1) fprintf(file, "\tldc %s\n",v.value);
     else if(v.know==-1){   //value is variable
         int i = atoi(v.value);
