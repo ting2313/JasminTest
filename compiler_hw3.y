@@ -14,26 +14,25 @@ FILE *file; // To generate .j file for Jasmin
 void yyerror(char *s);
 
 /* symbol table functions */
-struct symbol_row{
-    int number;
+typedef struct{
+    int reg;    //register,-1:globol
     int scope;
     char name[20];
-    char data_type[10];
-};
-struct symbol_row s_table[50] = {};
-int max_index = 0;
+    char type[10];
+}symbol_row;
+symbol_row s_table[128] = {};
+int max_reg = -1;
+int max_index = -1;
 int scope = 0;
 
 int lookup_symbol();
-void create_symbol_table();
-void free_symbol_table();
 void insert_symbol();
 void dump_symbol();
 
 /* stack functions */
 typedef struct{
     int know;   //1:const 0:sth in stack -1:variable
-    char value[16];
+    char value[16]; //k=1:const val ; k=-1:s_index
     char type[16];  //int or float
 }element;
 element stack[50] = {0};
@@ -45,6 +44,7 @@ char* casting();
 
 /* code generation functions, just an example! */
 void gencode_function();
+void gencode_exp();
 
 %}
 
@@ -71,7 +71,7 @@ void gencode_function();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> after_value expression type compound_stat declaration_type equal_rhs value
+%type <string> declaration_type after_value expression type compound_stat equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -85,8 +85,12 @@ program
 
 external_stat
     : declaration SEMICOLON
-    | func_def LCB func_compound{
+    | type ID LB arguments RB SEMICOLON {
+        //Predeclared function
 
+    }
+    | func_def LCB func_compound{
+        //define funciton
     }
 ;
 
@@ -95,40 +99,44 @@ func_compound
 
 declaration
     : type ID declaration_type{
+        max_index++;
+
         if(scope){
             //local variable
+            max_reg++;
             fprintf(file, "\tldc %s\n",$3);
             if(!strcmp($1,"float")){
-                fprintf(file, "\tfstore %d\n", max_index);
-                max_index++;
-
-                /*maintain symbol table*/
-
+                fprintf(file, "\tfstore %d\n", max_reg);
+                insert_symbol($2,"float",max_reg);
             }else{
-                fprintf(file, "\tistore %d\n", max_index);
-                max_index++;
-
-                /*maintain symbol table*/
+                fprintf(file, "\tistore %d\n", max_reg);
+                insert_symbol($2,"int",max_reg);
             }
         }else{
             //globol variable
             if(!strcmp($1,"float")){
                 fprintf(file,
                     ".field public static %s F=%s\n", $2,$3);
+                insert_symbol($2,"float",-1);
             }else{
                 fprintf(file,
                     ".field public static %s I=%s\n", $2,$3);
+                insert_symbol($2,"int",-1);
             }
         }
     }
 ;
 
 declaration_type    //string:the number of answer;
-    : equal_rhs{
-        $$ = $1;
+    : '=' I_CONST{
+        char temp[10] = {0};
+        sprintf(temp, "%d",$2);
+        $$ = strdup(temp);
     }
-    | LB arguments RB   {
-
+    | '=' F_CONST{
+        char temp[10] = {0};
+        sprintf(temp, "%f",$2);
+        $$ = strdup(temp);
     }
     | {$$ = "0";}    //declaring without init value
 ;
@@ -181,6 +189,7 @@ statments
 stat
     : declaration SEMICOLON
     | ID equal_rhs SEMICOLON{
+
     }
     | WHILE LB condition RB LCB compound_stat
     | IF LB condition RB LCB compound_stat else_scope
@@ -219,7 +228,6 @@ comparison
 equal_rhs
     :'=' value {
         $$=$2;
-        //element item = pop();
     }
     | ADDASGN value {$$=$2;}
     | SUBASGN value {$$=$2;}
@@ -245,6 +253,7 @@ value
         $$=strdup($2);
         element item = pop();
         sprintf(item.value,"-%s",item.value);
+        // struction??
         push(item.know,item.value,item.type);
     }
     | STR_CONST     {$$=strdup($1);}
@@ -255,8 +264,11 @@ value
 
     }
     | ID {
-        //find index
-        //push
+        $$=$1;
+        char temp[10]={0};
+        int i=lookup_symbol($1);
+        sprintf(temp,"%d",i);
+        push(-1,temp,s_table[i].type);
     }
     | ID LB input_argu RB{
 
@@ -281,70 +293,19 @@ postfix
 
 expression
     :value '+' value {
-        element v1 = pop();
-        element v2 = pop();
-        printf("value+value\n");
-        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-
-        if(!strcmp(casting(v1,v2),"int")){
-            fprintf(file, "\tiadd\n");
-        }else{
-            fprintf(file, "\tfadd\n");
-        }
-        push(0,"un",casting(v1,v2));
+        gencode_exp("add");
     }
     |value '-' value {
-        element v1 = pop();
-        element v2 = pop();
-        printf("value-value\n");
-        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-        if(!strcmp(casting(v1,v2),"int")){
-            fprintf(file, "\tisub\n");
-        }else{
-            fprintf(file, "\tfsub\n");
-        }
-        push(0,"un",casting(v1,v2));
+        gencode_exp("sub");
     }
     |value '*' value {
-        element v1 = pop();
-        element v2 = pop();
-        printf("value*value\n");
-        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-        if(!strcmp(casting(v1,v2),"int")){
-            fprintf(file, "\timul\n");
-        }else{
-            fprintf(file, "\tfmul\n");
-        }
-        push(0,"un",casting(v1,v2));
+        gencode_exp("mul");
     }
     |value '/' value {
-        element v1 = pop();
-        element v2 = pop();
-        printf("value/value\n");
-        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-        if(!strcmp(casting(v1,v2),"int")){
-            fprintf(file, "\tidiv\n");
-        }else{
-            fprintf(file, "\tfdiv\n");
-        }
-        push(0,"un",casting(v1,v2));
+        gencode_exp("div");
     }
     |value '%' value {
-        element v1 = pop();
-        element v2 = pop();
-        printf("value mod value\n");
-        if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-        if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-        if(!strcmp(casting(v1,v2),"int")){
-            fprintf(file, "\tirem\n");
-        }else{
-            //error!!!!
-        }
-        push(0,"un","int");
+        gencode_exp("rem");
     }
 ;
 
@@ -393,13 +354,97 @@ void yyerror(char *s)
 }
 
 /* stmbol table functions */
-void create_symbol() {}
-void insert_symbol() {}
-int lookup_symbol() {}
-void dump_symbol() {}
+void insert_symbol(char* name,char* type,int reg) {
+    s_table[max_index].reg = reg;
+    s_table[max_index].scope = scope;
+    sprintf(s_table[max_index].name, "%s",name);
+    sprintf(s_table[max_index].type, "%s",type);
+    printf("insert:%s,%d\n",s_table[max_index].name,
+        s_table[max_index].reg);
+}
+
+int lookup_symbol(char* name) {
+    /*reture the index in symbol table*/
+    if(max_index==-1)   return -1;
+    for(int i=0;i<=max_index;i++){
+        if(!strcmp(s_table[i].name,name)){
+            printf("lookup:%s,%d\n",
+                s_table[i].name,i);
+            return i;
+        }
+    }
+}
+
+void dump_symbol() {
+    if(max_index==-1)   return;
+    for(int i=max_index;i>=0;i--){
+        if(s_table[i].scope==(scope-1)){
+            if(s_table[i].reg!=-1){
+                max_reg--;
+            }
+            max_index--;
+        }
+    }
+}
 
 /* code generation functions */
 void gencode_function() {}
+void gencode_exp(char* op){
+    element v1 = pop();
+    element v2 = pop();
+
+    if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
+    else if(v1.know==-1){   //value is variable
+        int i = atoi(v1.value);
+        if(s_table[i].reg==-1){   //globol
+            if(!strcmp(v2.type,"int")){
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s I\n",
+                    s_table[i].name);
+            }else{
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s F\n",
+                    s_table[i].name);
+            }
+        }else{  //local
+            if(!strcmp(v1.type,"int")){
+                fprintf(file, "\tiload %d\n",s_table[i].reg);
+            }else{
+                fprintf(file, "\tfload %d\n",s_table[i].reg);
+            }
+        }
+    }
+
+    if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
+    else if(v2.know==-1){   //value is variable
+        int i = atoi(v2.value);
+        if(s_table[i].reg==-1){   //globol
+            if(!strcmp(v2.type,"int")){
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s I\n",
+                    s_table[i].name);
+            }else{
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s F\n",
+                    s_table[i].name);
+            }
+        }else{  //local
+            if(!strcmp(v2.type,"int")){
+                fprintf(file, "\tiload %d\n",s_table[i].reg);
+            }else{
+                fprintf(file, "\tfload %d\n",s_table[i].reg);
+            }
+        }
+    }
+
+    if(!strcmp(casting(v1,v2),"int")){
+        fprintf(file, "\ti%s\n",op);
+    }else{
+        fprintf(file, "\tf%s\n",op);
+    }
+
+    push(0,"un",casting(v1,v2));
+}
 
 /*stack funtions*/
 element pop(){
@@ -414,7 +459,6 @@ void push(int know,char* value, char* type){
     stack[top].know = know;
     sprintf(stack[top].value,"%s",value);
     sprintf(stack[top].type,"%s",type);
-    printf("push:index:%d(%s,%s)\n",top,stack[top].value,stack[top].type);
 }
 
 char* casting(element v1, element v2){
