@@ -277,10 +277,6 @@ value
     | F     {$$="0";}
 ;
 
-
-
-;
-
 after_value
     : expression {$$=strdup($1);}
     | comparison {$$="comparison";}
@@ -389,53 +385,36 @@ void dump_symbol() {
 
 /* code generation functions */
 void gencode_function() {}
+void gencode_pop(element v){
+    if(v.know==1) fprintf(file, "\tldc %s\n",v.value);
+    else if(v.know==-1){   //value is variable
+        int i = atoi(v.value);
+        if(s_table[i].reg==-1){   //globol
+            if(!strcmp(v.type,"int")){
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s I\n",
+                    s_table[i].name);
+            }else{
+                fprintf(file,
+                    "\tgetstatic compiler_hw3/%s F\n",
+                    s_table[i].name);
+            }
+        }else{  //local
+            if(!strcmp(v.type,"int")){
+                fprintf(file, "\tiload %d\n",s_table[i].reg);
+            }else{
+                fprintf(file, "\tfload %d\n",s_table[i].reg);
+            }
+        }
+    }
+}
+
 void gencode_exp(char* op){
     element v1 = pop();
     element v2 = pop();
 
-    if(v1.know==1) fprintf(file, "\tldc %s\n",v1.value);
-    else if(v1.know==-1){   //value is variable
-        int i = atoi(v1.value);
-        if(s_table[i].reg==-1){   //globol
-            if(!strcmp(v2.type,"int")){
-                fprintf(file,
-                    "\tgetstatic compiler_hw3/%s I\n",
-                    s_table[i].name);
-            }else{
-                fprintf(file,
-                    "\tgetstatic compiler_hw3/%s F\n",
-                    s_table[i].name);
-            }
-        }else{  //local
-            if(!strcmp(v1.type,"int")){
-                fprintf(file, "\tiload %d\n",s_table[i].reg);
-            }else{
-                fprintf(file, "\tfload %d\n",s_table[i].reg);
-            }
-        }
-    }
-
-    if(v2.know==1) fprintf(file, "\tldc %s\n",v2.value);
-    else if(v2.know==-1){   //value is variable
-        int i = atoi(v2.value);
-        if(s_table[i].reg==-1){   //globol
-            if(!strcmp(v2.type,"int")){
-                fprintf(file,
-                    "\tgetstatic compiler_hw3/%s I\n",
-                    s_table[i].name);
-            }else{
-                fprintf(file,
-                    "\tgetstatic compiler_hw3/%s F\n",
-                    s_table[i].name);
-            }
-        }else{  //local
-            if(!strcmp(v2.type,"int")){
-                fprintf(file, "\tiload %d\n",s_table[i].reg);
-            }else{
-                fprintf(file, "\tfload %d\n",s_table[i].reg);
-            }
-        }
-    }
+    gencode_pop(v1);
+    gencode_pop(v2);
 
     if(!strcmp(casting(v1,v2),"int")){
         fprintf(file, "\ti%s\n",op);
