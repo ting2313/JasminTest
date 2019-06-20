@@ -108,17 +108,6 @@ external_stat
     }
     | func_def LCB func_compound{
         //define funciton
-        char c;
-        if(!strcmp($1,"int")){
-            fprintf(file, "\tireturn\n");
-        }else if(!strcmp($1,"float")){
-            fprintf(file, "\tfreturn\n");
-        }else if(!strcmp($1,"void")){
-            fprintf(file, "\treturn\n");
-        }
-
-        fprintf(file, ".end method\n");
-
     }
 ;
 
@@ -263,8 +252,16 @@ argu
 ;
 
 input_argu
-    : value COMMA input_argu
-    | value
+    : value COMMA input_argu{
+        printf("test1\n");
+        element parameter = pop();
+        gencode_push(parameter);
+    }
+    | value{
+        printf("test2\n");
+        element parameter = pop();
+        gencode_push(parameter);
+    }
 ;
 
 compound_stat
@@ -274,14 +271,28 @@ compound_stat
 
 end_stat
     : RETURN end_semi{
+
     }
     |{
+
     }
 ;
 
 end_semi
-    : SEMICOLON
-    | value SEMICOLON
+    : SEMICOLON{
+        fprintf(file, "\treturn\n");
+        fprintf(file, ".end method\n");
+    }
+    | value SEMICOLON{
+        element rv = pop();
+        gencode_push(rv);
+        if(!strcmp(rv.type,"int")){
+            fprintf(file, "\tireturn\n");
+        }else if(!strcmp(rv.type,"float")){
+            fprintf(file, "\tfreturn\n");
+        }
+        fprintf(file, ".end method\n");
+    }
 
 statments
     : stat statments
@@ -312,12 +323,9 @@ stat
     | value postfix SEMICOLON
     | ID LB input_argu RB SEMICOLON{
         int i = lookup_func($1);
-        printf("test:%s\n",$1);
-        print_func();
         fprintf(file,
             "\tinvokestatic compiler_hw3/%s(%s)V\n",
             $1,f_table[i].a_type);
-        //invokestatic compiler_hw3/foo(I)I
     }
     | ID LB  RB SEMICOLON{
         fprintf(file,
@@ -429,11 +437,15 @@ value
     }
     | ID LB input_argu RB{
         int i=lookup_func($1);
-/**/
-
         fprintf(file,
             "\tinvokestatic compiler_hw3/%s(%s)%s\n",
             $1,f_table[i].a_type,f_table[i].type);
+        if(!strcmp(f_table[i].type,"I")){
+            push(0,"un","int");
+        }else{
+            push(0,"un","float");
+        }
+        print_stack();
     }
     | T     {$$="1";}
     | F     {$$="0";}
@@ -585,10 +597,7 @@ void gencode_print(char* type){
 }
 
 /*return whether should put back item from register 50 */
-void gencode_push(element v,int flag){
-    // pop a element from my stack
-    // and push into stack of Jasmin
-    // flag=0 mean second value of expr
+void gencode_push(element v){
 
     if(v.know==1) {
         fprintf(file, "\tldc %s\n",v.value);
@@ -611,10 +620,7 @@ void gencode_push(element v,int flag){
                 fprintf(file, "\tfload %d\n",s_table[i].reg);
             }
         }
-    }else if(flag){  // value in stack
-
     }
-
 }
 
 element gencode_cast(element v_cast,element v,int flag){
@@ -638,9 +644,9 @@ void gencode_exp(char* op){
     element v1 = pop();
     element v2 = pop();
 
-    gencode_push(v1,0);
+    gencode_push(v1);
     v1=gencode_cast(v1,v2,0);
-    gencode_push(v2,1);
+    gencode_push(v2);
     v2=gencode_cast(v2,v1,0);
 
     fprintf(file, "\tswap\n");
