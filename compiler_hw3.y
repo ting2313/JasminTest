@@ -64,6 +64,9 @@ void gencode_exp();
 void gencode_assign();
 char gencode_atype();
 
+int lable_count = 0;
+int exit_count = 0;
+
 %}
 
 %union {
@@ -89,7 +92,7 @@ char gencode_atype();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> postfix func_def argu input_argu arguments declaration_type after_value expression type compound_stat equal_rhs value
+%type <string> else_scope postfix func_def argu input_argu arguments declaration_type after_value expression type compound_stat equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -276,6 +279,7 @@ input_argu
 
 compound_stat
     : statments end_stat RCB    {
+
     }
 ;
 
@@ -328,7 +332,8 @@ stat
         }
     }
     | WHILE LB condition RB LCB compound_stat
-    | IF LB condition RB LCB compound_stat else_scope
+    | IF LB condition RB LCB compound_stat else_scope{
+    }
     | PRINT LB print_word RB SEMICOLON
     | value postfix SEMICOLON{
         element v = pop();
@@ -358,9 +363,16 @@ stat
 ;
 
 else_scope
-    : ELSE LCB compound_stat
-    | ELSE IF LB condition RB LCB compound_stat else_scope
-    |
+    : ELSE LCB compound_stat{
+        fprintf(file, "EXIT_%d:\n", exit_count);
+        exit_count++;
+    }
+    | ELSE IF LB condition RB LCB compound_stat else_scope{
+
+    }
+    |{
+
+    }
 ;
 
 print_word
@@ -408,13 +420,35 @@ condition
 
 comparison
     : value EQ value{
-
+        gencode_exp("sub");
+        fprintf(file, "\tifne LABLE_%d\n",lable_count);
+        lable_count++;
     }
-    | value MT value
-    | value LT value
-    | value MTE value
-    | value LTE value
-    | value NE value
+    | value MT value{
+        gencode_exp("sub");
+        fprintf(file, "\tifle LABLE_%d\n",lable_count);
+        lable_count++;
+    }
+    | value LT value{
+        gencode_exp("sub");
+        fprintf(file, "\tifge LABLE_%d\n",lable_count);
+        lable_count++;
+    }
+    | value MTE value{
+        gencode_exp("sub");
+        fprintf(file, "\tiflt LABLE_%d\n",lable_count);
+        lable_count++;
+    }
+    | value LTE value{
+        gencode_exp("sub");
+        fprintf(file, "\tifgt LABLE_%d\n",lable_count);
+        lable_count++;
+    }
+    | value NE value{
+        gencode_exp("sub");
+        fprintf(file, "\tifeq LABLE_%d\n",lable_count);
+        lable_count++;
+    }
 ;
 
 
@@ -506,19 +540,19 @@ postfix
 
 expression
     :value '+' value {
-        gencode_exp("add",0);
+        gencode_exp("add");
     }
     |value '-' value {
-        gencode_exp("sub",0);
+        gencode_exp("sub");
     }
     |value '*' value {
-        gencode_exp("mul",0);
+        gencode_exp("mul");
     }
     |value '/' value {
-        gencode_exp("div",0);
+        gencode_exp("div");
     }
     |value '%' value {
-        gencode_exp("rem",0);
+        gencode_exp("rem");
     }
 ;
 

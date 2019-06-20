@@ -9,6 +9,9 @@
 extern YYSTYPE yylval; //YYSTYPE
 extern int scope;
 extern void dump_symbol();
+extern FILE *file;
+extern int lable_count;
+extern int exit_count;
 
 char buf[256];
 char str[256];
@@ -76,7 +79,12 @@ id			{letter}+({letter}|{digit})*
 
  /* Condition and Loop Keywords */
 "if"		{ CONCAT; return IF; }
-"else"		{ CONCAT; return ELSE; }
+"else"		{
+                fprintf(file, "\tgoto EXIT_%d\n",exit_count);
+                fprintf(file, "LABLE_%d:\n",lable_count-1);
+                CONCAT;
+                return ELSE;
+            }
 "for"		{ CONCAT; return FOR; }
 "while"		{ CONCAT; return WHILE; }
 
@@ -85,7 +93,7 @@ id			{letter}+({letter}|{digit})*
 "int"		{ CONCAT; yylval.string="int";return INT; }
 "float"  	{ CONCAT; yylval.string="float";return FLOAT; }
 "string"  	{ CONCAT; yylval.string="string";return STRING; }
-"bool"  	{ CONCAT; yylval.string="bool";return BOOL; }
+"bool"  	{ CONCAT; yylval.string="int";return BOOL; }
 
  /* boolean Keywords */
 "true"      { CONCAT; return T; }
