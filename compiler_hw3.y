@@ -163,7 +163,6 @@ declaration_type    //string:the number of answer;
 
 func_def
     : type ID LB arguments RB{
-        print_stable();
         int r[max_reg+1];
         for(int i=0;i<=max_reg;i++){
             r[i] = s_table[max_index-i].reg;
@@ -173,7 +172,6 @@ func_def
             s_table[max_index-j].reg=r[max_reg-j];
             j++;
         }
-        print_stable();
 
         func_row new;
         max_f++;
@@ -336,7 +334,6 @@ stat
     | ID LB input_argu RB SEMICOLON{
         int i = lookup_func($1);
         element p[count_p];
-        printf("count_p:%d\n",count_p);
         for(int j=count_p-1;j>=0;j--){
             p[j] = pop();
         }
@@ -433,7 +430,6 @@ value
         char temp[10]={0};
         sprintf(temp,"%d",$1);
         $$=strdup(temp);
-        printf("push I_CONST:%s\n",temp);
         push(1,temp,"int");
     }
     | F_CONST   {
@@ -459,7 +455,6 @@ value
     | ID LB input_argu RB{
         int i=lookup_func($1);
         element p[count_p];
-        printf("count_p:%d\n",count_p);
         for(int j=count_p-1;j>=0;j--){
             p[j] = pop();
         }
@@ -526,7 +521,7 @@ int main(int argc, char** argv)
     yylineno = 0;
 
     file = fopen("compiler_hw3.j","w");
-
+    printf("%d: ", yylineno+1);
     fprintf(file,   ".class public compiler_hw3\n"
                     ".super java/lang/Object\n");
 

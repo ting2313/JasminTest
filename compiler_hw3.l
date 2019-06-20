@@ -9,7 +9,12 @@
 extern YYSTYPE yylval; //YYSTYPE
 extern int scope;
 extern void dump_symbol();
+
 char buf[256];
+char str[256];
+#define CONCAT { strncat(buf, yytext, 256 - strlen(buf) - 1);printf("%s",yytext); }
+#define STR {strncat(str, yytext, 256 - strlen(str) - 1);}
+#define CLEAR { bzero(buf, sizeof(buf)); }
 %}
 
 /* Define regular expression label */
@@ -28,95 +33,95 @@ id			{letter}+({letter}|{digit})*
 %%
 
  /* Arithmetic */
-"+"     { return '+'; }
-"-" 	{ return '-'; }
-"*" 	{ return '*'; }
-"/" 	{ return '/'; }
-"%"     { return '%'; }
-"++"    { return INC; }
-"--"    { return DEC; }
+"+"     { CONCAT; return '+'; }
+"-" 	{ CONCAT; return '-'; }
+"*" 	{ CONCAT; return '*'; }
+"/" 	{ CONCAT; return '/'; }
+"%"     { CONCAT; return '%'; }
+"++"    { CONCAT; return INC; }
+"--"    { CONCAT; return DEC; }
 
  /* Relational */
-">"		{ return MT; }
-"<"		{ return LT; }
-">="	{ return MTE; }
-"<="	{ return LTE; }
-"=="	{ return EQ; }
-"!="	{ return NE; }
+">"		{ CONCAT; return MT; }
+"<"		{ CONCAT; return LT; }
+">="	{ CONCAT; return MTE; }
+"<="	{ CONCAT; return LTE; }
+"=="	{ CONCAT; return EQ; }
+"!="	{ CONCAT; return NE; }
 
  /* Assignment */
-"="		{ return '='; }
-"+="	{ return ADDASGN; }
-"-="	{ return SUBASGN; }
-"*="	{ return MULASGN; }
-"/="	{ return DIVASGN; }
-"%="	{ return MODASGN; }
+"="		{ CONCAT; return '='; }
+"+="	{ CONCAT; return ADDASGN; }
+"-="	{ CONCAT; return SUBASGN; }
+"*="	{ CONCAT; return MULASGN; }
+"/="	{ CONCAT; return DIVASGN; }
+"%="	{ CONCAT; return MODASGN; }
 
  /* Logical */
-"&&"	{ return AND; }
-"||"	{ return OR; }
-"!"		{ return NOT; }
+"&&"	{ CONCAT; return AND; }
+"||"	{ CONCAT; return OR; }
+"!"		{ CONCAT; return NOT; }
 
  /* Delimiters */
-"("		{ return LB; }
-")"		{ return RB; }
-"{"		{ scope++;return LCB; }
-"}"		{ dump_symbol();scope--;return RCB; }
-"["		{ return '['; }
-"]"		{ return ']'; }
-","		{ return COMMA; }
+"("		{ CONCAT; return LB; }
+")"		{ CONCAT; return RB; }
+"{"		{ CONCAT; scope++;return LCB; }
+"}"		{ CONCAT; dump_symbol();scope--;return RCB; }
+"["		{ CONCAT; return '['; }
+"]"		{ CONCAT; return ']'; }
+","		{ CONCAT; return COMMA; }
 
  /* Print Keywords */
-"print"		{ return PRINT; }
+"print"		{ CONCAT; return PRINT; }
 
  /* Condition and Loop Keywords */
-"if"		{ return IF; }
-"else"		{ return ELSE; }
-"for"		{ return FOR; }
-"while"		{ return WHILE; }
+"if"		{ CONCAT; return IF; }
+"else"		{ CONCAT; return ELSE; }
+"for"		{ CONCAT; return FOR; }
+"while"		{ CONCAT; return WHILE; }
 
  /* Declaration Keywords */
-"void"		{ yylval.string="void";return VOID; }
-"int"		{ yylval.string="int";return INT; }
-"float"  	{ yylval.string="float";return FLOAT; }
-"string"  	{ yylval.string="string";return STRING; }
-"bool"  	{ yylval.string="bool";return BOOL; }
+"void"		{ CONCAT; yylval.string="void";return VOID; }
+"int"		{ CONCAT; yylval.string="int";return INT; }
+"float"  	{ CONCAT; yylval.string="float";return FLOAT; }
+"string"  	{ CONCAT; yylval.string="string";return STRING; }
+"bool"  	{ CONCAT; yylval.string="bool";return BOOL; }
 
  /* boolean Keywords */
-"true"      { return TRUE; }
-"false"     { return FALSE; }
+"true"      { CONCAT; return TRUE; }
+"false"     { CONCAT; return FALSE; }
 
-"return"    { return RETURN; }
+"return"    { CONCAT; return RETURN; }
 
  /* String Constant */
-\"				        { BEGIN STRING_STATE; }
-<STRING_STATE>\"		{ BEGIN INITIAL; }
-<STRING_STATE>[^"]*		{ yylval.string=strdup(yytext);return STR_CONST; }
+\"				        { CONCAT; BEGIN STRING_STATE; }
+<STRING_STATE>\"		{ CONCAT; BEGIN INITIAL; }
+<STRING_STATE>[^"]*		{ CONCAT; yylval.string=strdup(yytext);return STR_CONST; }
 
  /* Number Constant */
-{integer}	{ yylval.i_val=atoi(yytext);return I_CONST; }
-{double}	{ yylval.f_val=atof(yytext);return F_CONST; }
+{integer}	{ CONCAT; yylval.i_val=atoi(yytext);return I_CONST; }
+{double}	{ CONCAT; yylval.f_val=atof(yytext);return F_CONST; }
 
  /* C type Comment */
-"/*"				{ BEGIN COMMENT; }
-<COMMENT>[^*\n]+	{ }
-<COMMENT>\n			{ }
-<COMMENT>"*"		{ }
-<COMMENT>"*/"		{ BEGIN INITIAL; }
+"/*"				{ CONCAT; BEGIN COMMENT; }
+<COMMENT>[^*\n]+	{ CONCAT; }
+<COMMENT>\n			{ CONCAT; printf("%d: ",yylineno+1);}
+<COMMENT>"*"		{ CONCAT; }
+<COMMENT>"*/"		{ CONCAT; BEGIN INITIAL; }
 
  /* C++ type Comment */
-\/\/.*	{ ; }
+\/\/.*	{ CONCAT; ; }
 
  /* Variable ID */
-{id}       {yylval.string=strdup(yytext);return ID; }
+{id}       { CONCAT;yylval.string=strdup(yytext);return ID; }
 
  /* others */
 
-[;]         { return SEMICOLON; }
-[\n]        { }
-[ \t]		{ } /* Ignore */
-[^ \t\n] 	{ } /* Ignore other charactor sets */
-<<EOF>>     {return 0;}
+[;]         { CONCAT; return SEMICOLON; }
+[\n]        { CONCAT; printf("%d: ", yylineno+1);CLEAR;}
+[ \t]		{ CONCAT;} /* Ignore */
+[^ \t\n] 	{ CONCAT; } /* Ignore other charactor sets */
+<<EOF>>     {printf("\r       ");dump_symbol();return 0;}
 
 %%
 
