@@ -1,5 +1,6 @@
 void main(){
 	int a = 20;
+	string b = "hi";
     if (a == 40){
         print("a is equal to 40");
     }

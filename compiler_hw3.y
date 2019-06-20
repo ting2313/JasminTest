@@ -130,9 +130,12 @@ declaration
             if(!strcmp($1,"float")){
                 fprintf(file, "\tfstore %d\n", max_reg);
                 insert_symbol($2,"float",max_reg,scope);
-            }else{
+            }else if(!strcmp($1,"int")){
                 fprintf(file, "\tistore %d\n", max_reg);
                 insert_symbol($2,"int",max_reg,scope);
+            }else{
+                fprintf(file, "\tastore %d\n", max_reg);
+                insert_symbol($2,"string",max_reg,scope);
             }
         }else{
             //globol variable
@@ -327,8 +330,10 @@ stat
         rhs=gencode_cast(rhs,lhs,1);
         if(!strcmp(s_table[i].type,"int")){
             fprintf(file, "\tistore %d\n",s_table[i].reg);
-        }else{
+        }else if(!strcmp(s_table[i].type,"float")){
             fprintf(file, "\tfstore %d\n",s_table[i].reg);
+        }else{
+            fprintf(file, "\tastore %d\n",s_table[i].reg);
         }
     }
     | WHILE LB condition RB LCB compound_stat
@@ -478,7 +483,12 @@ value
         $$=strdup(temp);
         push(1,temp,"float");
     }
-    | STR_CONST     {$$=strdup($1);}
+    | STR_CONST     {
+        char temp[10]={0};
+        sprintf(temp,"\"%s\"",$1);
+        $$=strdup($1);
+        push(1,temp,"string");
+    }
     | after_value     {
 
     }
