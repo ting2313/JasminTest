@@ -20,6 +20,7 @@ typedef struct{
 }func_row;
 func_row f_table[32] = {};
 int max_f = -1;
+int count_p = 0;
 int lookup_func();
 void print_func();
 
@@ -120,7 +121,9 @@ declaration
         if(scope){
             //local variable
             max_reg++;
-            fprintf(file, "\tldc %s\n",$3);
+            if(!strcmp($3,"0")){
+                fprintf(file, "\tldc 0\n");
+            }
             if(!strcmp($1,"float")){
                 fprintf(file, "\tfstore %d\n", max_reg);
                 insert_symbol($2,"float",max_reg,scope);
@@ -144,21 +147,34 @@ declaration
 ;
 
 declaration_type    //string:the number of answer;
-    : '=' I_CONST{
+    :'=' value{
+        element rhs = pop();
+        if(scope){
+            gencode_push(rhs);
+        }
         char temp[10] = {0};
-        sprintf(temp, "%d",$2);
+        sprintf(temp, "%s",$2);
         $$ = strdup(temp);
     }
-    | '=' F_CONST{
-        char temp[10] = {0};
-        sprintf(temp, "%f",$2);
-        $$ = strdup(temp);
-    }
-    | {$$ = "0";}    //declaring without init value
+    | {
+        $$ = "0";
+    }    //declaring without init value
 ;
 
 func_def
     : type ID LB arguments RB{
+        print_stable();
+        int r[max_reg+1];
+        for(int i=0;i<=max_reg;i++){
+            r[i] = s_table[max_index-i].reg;
+        }
+        int j=0;
+        for(int i=max_reg;i>=0;i--){
+            s_table[max_index-j].reg=r[max_reg-j];
+            j++;
+        }
+        print_stable();
+
         func_row new;
         max_f++;
         sprintf(new.name,"%s",$2);
@@ -253,14 +269,10 @@ argu
 
 input_argu
     : value COMMA input_argu{
-        printf("test1\n");
-        element parameter = pop();
-        gencode_push(parameter);
+        count_p++;
     }
     | value{
-        printf("test2\n");
-        element parameter = pop();
-        gencode_push(parameter);
+        count_p = 1;
     }
 ;
 
@@ -323,6 +335,15 @@ stat
     | value postfix SEMICOLON
     | ID LB input_argu RB SEMICOLON{
         int i = lookup_func($1);
+        element p[count_p];
+        printf("count_p:%d\n",count_p);
+        for(int j=count_p-1;j>=0;j--){
+            p[j] = pop();
+        }
+        for(int j=0;j<count_p;j++){
+            gencode_push(p[j]);
+        }
+
         fprintf(file,
             "\tinvokestatic compiler_hw3/%s(%s)V\n",
             $1,f_table[i].a_type);
@@ -437,6 +458,14 @@ value
     }
     | ID LB input_argu RB{
         int i=lookup_func($1);
+        element p[count_p];
+        printf("count_p:%d\n",count_p);
+        for(int j=count_p-1;j>=0;j--){
+            p[j] = pop();
+        }
+        for(int j=0;j<count_p;j++){
+            gencode_push(p[j]);
+        }
         fprintf(file,
             "\tinvokestatic compiler_hw3/%s(%s)%s\n",
             $1,f_table[i].a_type,f_table[i].type);
@@ -445,7 +474,6 @@ value
         }else{
             push(0,"un","float");
         }
-        print_stack();
     }
     | T     {$$="1";}
     | F     {$$="0";}
