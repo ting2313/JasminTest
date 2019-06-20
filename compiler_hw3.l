@@ -86,7 +86,12 @@ id			{letter}+({letter}|{digit})*
                 return ELSE;
             }
 "for"		{ CONCAT; return FOR; }
-"while"		{ CONCAT; return WHILE; }
+"while"		{
+                fprintf(file, "LABLE_%d:\n",lable_count);
+                lable_count++;
+                CONCAT;
+                return WHILE;
+            }
 
  /* Declaration Keywords */
 "void"		{ CONCAT; yylval.string="void";return VOID; }

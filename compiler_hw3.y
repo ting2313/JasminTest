@@ -336,8 +336,13 @@ stat
             fprintf(file, "\tastore %d\n",s_table[i].reg);
         }
     }
-    | WHILE LB condition RB LCB compound_stat
+    | WHILE LB condition RB LCB compound_stat{
+        fprintf(file, "goto LABLE_%d\n", lable_count-2);
+        fprintf(file, "LABLE_%d:\n", lable_count-1);
+    }
     | IF LB condition RB LCB compound_stat else_scope{
+        fprintf(file, "EXIT_%d:\n", exit_count);
+        exit_count++;
     }
     | PRINT LB print_word RB SEMICOLON
     | value postfix SEMICOLON{
@@ -369,8 +374,7 @@ stat
 
 else_scope
     : ELSE LCB compound_stat{
-        fprintf(file, "EXIT_%d:\n", exit_count);
-        exit_count++;
+
     }
     | ELSE IF LB condition RB LCB compound_stat else_scope{
 
