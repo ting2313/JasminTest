@@ -3,7 +3,7 @@ int b;
 
 void main() {
     int d=30/2;
-    d /= 10/2;
+    d++;
     print(d);
 
     return;

@@ -73,7 +73,7 @@ char gencode_atype();
 }
 
 /* Token without return */
-%left '=' RETURN TRUE FALSE
+%left '=' RETURN
 %left ADDASGN SUBASGN MULASGN DIVASGN MODASGN
 %left PRINT
 %left IF ELSE FOR WHILE T F
@@ -89,7 +89,7 @@ char gencode_atype();
 %left <i_val> B_CONST
 %left <string> STR_CONST ID VOID INT FLOAT STRING BOOL
 
-%type <string> func_def argu input_argu arguments declaration_type after_value expression type compound_stat equal_rhs value
+%type <string> postfix func_def argu input_argu arguments declaration_type after_value expression type compound_stat equal_rhs value
 /* Yacc will start at this nonterminal */
 %start program
 
@@ -330,7 +330,13 @@ stat
     | WHILE LB condition RB LCB compound_stat
     | IF LB condition RB LCB compound_stat else_scope
     | PRINT LB print_word RB SEMICOLON
-    | value postfix SEMICOLON
+    | value postfix SEMICOLON{
+        element v = pop();
+        gencode_push(v);
+        fprintf(file, "\tldc 1\n");
+        fprintf(file, "\t%s\n",$2);
+        fprintf(file, "\tistore %d\n", s_table[atoi(v.value)].reg);
+    }
     | ID LB input_argu RB SEMICOLON{
         int i = lookup_func($1);
         element p[count_p];
@@ -345,7 +351,7 @@ stat
             "\tinvokestatic compiler_hw3/%s(%s)V\n",
             $1,f_table[i].a_type);
     }
-    | ID LB  RB SEMICOLON{
+    | ID LB RB SEMICOLON{
         fprintf(file,
             "\tinvokestatic compiler_hw3/%s()V\n",$1);
     }
@@ -470,8 +476,14 @@ value
             push(0,"un","float");
         }
     }
-    | T     {$$="1";}
-    | F     {$$="0";}
+    | T     {
+        $$="1";
+        push(1,"1","int");
+    }
+    | F     {
+        $$="0";
+        push(1,"1","int");
+    }
 ;
 
 after_value
@@ -480,8 +492,16 @@ after_value
 ;
 
 postfix
-    : INC
-    | DEC
+    : INC{
+        char temp[10] = {0};
+        sprintf(temp,"%s","iadd");
+        $$ = strdup(temp);
+    }
+    | DEC{
+        char temp[10] = {0};
+        sprintf(temp,"%s","isub");
+        $$ = strdup(temp);
+    }
 ;
 
 expression
